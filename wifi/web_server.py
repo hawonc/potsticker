@@ -19,6 +19,7 @@ monitor = None
 attack_log = []
 max_log_entries = 100
 
+#creates a new network on the FreeWilie board
 def custom_network_pot():
 # Configure the serial port parameters
 # Replace 'COM4' with your port name (e.g., '/dev/ttyUSB0' on Linux or 'COM1' on Windows)
