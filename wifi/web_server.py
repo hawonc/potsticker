@@ -608,6 +608,40 @@ def honeypot_status():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/ap-info')
+def get_ap_info():
+    """Get Access Point info from serial device"""
+    try:
+        info = info_pull()
+        if info:
+            # Parse the info string: 'MAC: xx IP: x.x.x.x SSID: name'
+            parts = {}
+            mac_match = re.search(r'MAC:\s*([0-9a-f:]+)', info, re.IGNORECASE)
+            ip_match = re.search(r'IP:\s*([0-9.]+)', info)
+            ssid_match = re.search(r'SSID:\s*(.+)$', info)
+            
+            if mac_match:
+                parts['mac'] = mac_match.group(1)
+            if ip_match:
+                parts['ip'] = ip_match.group(1)
+            if ssid_match:
+                parts['ssid'] = ssid_match.group(1).strip()
+            
+            return jsonify({
+                'success': True,
+                'connected': True,
+                'raw': info,
+                **parts
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'connected': False,
+                'message': 'No AP info available'
+            })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 if __name__ == '__main__':
     print("Starting WiFi Monitor Web Interface...")
     print("Access the interface at: http://localhost:6767")

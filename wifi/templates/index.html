@@ -50,6 +50,34 @@
             </div>
         </section>
 
+        <!-- AP Info Section -->
+        <section class="card">
+            <div class="section-header">
+                <h2>FreeWili Access Point Info</h2>
+                <button onclick="refreshApInfo()" class="btn btn-secondary btn-xs">Refresh</button>
+            </div>
+            <div class="status-grid">
+                <div class="status-item">
+                    <div class="status-label">Connection</div>
+                    <div class="status-value" id="ap-connection-status">
+                        <span class="status-indicator status-offline"></span> Disconnected
+                    </div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">SSID</div>
+                    <div class="status-value" id="ap-ssid">--</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">MAC Address</div>
+                    <div class="status-value" id="ap-mac">--</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">IP Address</div>
+                    <div class="status-value" id="ap-ip">--</div>
+                </div>
+            </div>
+        </section>
+
         <!-- Control Panel -->
         <section class="card">
             <h2>Control Panel</h2>
@@ -126,7 +154,7 @@
         <section class="card">
             <div class="section-header">
                 <h2>Web Honeypot Logs</h2>
-                <button onclick="refreshHoneypotLogs()" class="btn btn-secondary btn-small">Refresh</button>
+                <button onclick="refreshHoneypotLogs()" class="btn btn-secondary btn-xs">Refresh</button>
             </div>
             <div class="honeypot-log-stats">
                 <span id="honeypot-entry-count">0</span> log entries

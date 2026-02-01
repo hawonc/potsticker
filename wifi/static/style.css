@@ -276,6 +276,11 @@ header h1 {
     font-size: 0.8rem;
 }
 
+.btn-xs {
+    padding: 4px 8px;
+    font-size: 0.65rem;
+}
+
 .btn-large {
     padding: 15px 30px;
     font-size: 1rem;

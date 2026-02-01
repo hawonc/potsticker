@@ -11,9 +11,51 @@ document.addEventListener('DOMContentLoaded', () => {
     loadAttacks();
     loadHoneypotLogs();
     updateHoneypotStatus();
+    refreshApInfo();
     startStatusUpdates();
     startHoneypotLogUpdates();
+    startApInfoUpdates();
 });
+
+// Start periodic AP info updates (every 10 seconds)
+let apInfoInterval;
+function startApInfoUpdates() {
+    if (apInfoInterval) clearInterval(apInfoInterval);
+    apInfoInterval = setInterval(() => {
+        refreshApInfo();
+    }, 10000);
+}
+
+// Fetch and display AP info
+async function refreshApInfo() {
+    try {
+        const response = await fetch(`${API_BASE}/ap-info`);
+        const data = await response.json();
+        
+        const connectionStatus = document.getElementById('ap-connection-status');
+        const ssidEl = document.getElementById('ap-ssid');
+        const macEl = document.getElementById('ap-mac');
+        const ipEl = document.getElementById('ap-ip');
+        
+        if (data.success && data.connected) {
+            connectionStatus.innerHTML = '<span class="status-indicator status-online"></span> Connected';
+            ssidEl.textContent = data.ssid || '--';
+            macEl.textContent = data.mac || '--';
+            ipEl.textContent = data.ip || '--';
+        } else {
+            connectionStatus.innerHTML = '<span class="status-indicator status-offline"></span> Disconnected';
+            ssidEl.textContent = '--';
+            macEl.textContent = '--';
+            ipEl.textContent = '--';
+        }
+    } catch (error) {
+        console.error('Error fetching AP info:', error);
+        const connectionStatus = document.getElementById('ap-connection-status');
+        if (connectionStatus) {
+            connectionStatus.innerHTML = '<span class="status-indicator status-offline"></span> Error';
+        }
+    }
+}
 
 // Start periodic status updates
 function startStatusUpdates() {
