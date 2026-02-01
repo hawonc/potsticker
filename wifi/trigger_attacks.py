@@ -261,12 +261,12 @@ Examples:
     
     args = parser.parse_args()
     
-    # Check for root privileges (required for packet injection)
-    import os
-    if os.geteuid() != 0:
-        print("[!] Warning: This script typically requires root privileges.")
-        print("    Try running with: sudo python trigger_attacks.py ...")
-        print()
+   # Check for root privileges (required for packet injection)
+#    import os
+    # if os.geteuid() != 0:
+    #     print("[!] Warning: This script typically requires root privileges.")
+    #     print("    Try running with: sudo python trigger_attacks.py ...")
+    #     print()
     
     try:
         if args.deauth_only:
@@ -291,3 +291,4 @@ Examples:
 
 if __name__ == "__main__":
     main()
+#x
