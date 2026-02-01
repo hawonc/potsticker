@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template_string, jsonify
+from flask import Flask, request, render_template_string
 from datetime import datetime
 import threading
 import json
@@ -30,7 +30,7 @@ def log_to_file():
 
 @app.before_request
 def log_request():
-    """Log each unique access"""
+    """Log each access attempt"""
     endpoint = request.path
     ip = request.remote_addr
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -42,43 +42,43 @@ def log_request():
 
 @app.route('/')
 def index():
-    return "Web Server - Passwords stored here! Sensitive directory listing enabled."
+    return "<h1>Web Server Internal</h1><p>Welcome to the legacy management portal. Restricted area: /admin</p>", 200
 
 @app.route('/robots.txt')
 def robots():
-    return "User-agent: *\nDisallow: /passwords\nDisallow: /admin\nDisallow: /wp-admin\nDisallow: /api/v1/secrets", 200, {'Content-Type': 'text/plain'}
+    return "User-agent: *\nDisallow: /admin\nDisallow: /passwords\nDisallow: /wp-admin\nDisallow: /config", 200, {'Content-Type': 'text/plain'}
 
 @app.route('/passwords')
 def passwords():
-    # Fake credentials for attackers to find
+    # FAKE CREDENTIALS FOR ATTACKERS
     creds = {
-        "admin": "SuperSecret2026!",
-        "db_user": "root_access_granted",
-        "ssh_key_path": "/home/user/.ssh/id_rsa_backup"
+        "internal_admin": "Summer2024!",
+        "db_user": "prod_db_access_9921",
+        "ssh_key_passphrase": "blue-sky-mountain-44"
     }
-    return jsonify(creds)
+    return json.dumps(creds), 200, {'Content-Type': 'application/json'}
 
 @app.route('/admin')
 def admin():
-    return "<h1>Admin Portal</h1><p>Internal Access Only. Your IP has been logged.</p>", 403
+    return "<h1>Admin Control Panel</h1><p>Login required.</p><form>User: <input type='text'><br>Pass: <input type='password'><br><input type='submit'></form>", 200
 
 @app.route('/wp-admin')
 def wp_admin():
-    return "<form>Username: <input type='text'><br>Password: <input type='password'><br><input type='submit' value='Login'></form>", 200
+    return "WordPress 6.2.2 - Login Redirect Error. Please contact sysadmin.", 403
 
 @app.route('/content')
 def content():
-    return "Index of /content/\n - uploads/\n - assets/\n - backup_2025.zip", 200
+    return "<h3>Index of /content</h3><ul><li><a href='#'>images/</a></li><li><a href='#'>backups/</a></li><li><a href='#'>scripts/</a></li></ul>", 200
 
-@app.route('/search')
-def search():
+@app.route('/greet')
+def greet():
     # VULNERABILITY: Reflected XSS
-    query = request.args.get('q', '')
+    name = request.args.get('name', 'Guest')
     template = f"""
     <html>
         <body>
-            <h2>Search results for: {query}</h2>
-            <p>0 results found.</p>
+            <h2>Welcome, {name}!</h2>
+            <p>You have been identified as an authorized viewer.</p>
         </body>
     </html>
     """
@@ -88,26 +88,25 @@ def search():
 def ping():
     # VULNERABILITY: Simulated Command Injection
     target = request.args.get('host', '127.0.0.1')
-    # We simulate the shell output to be safe in the container while looking vulnerable
+    # Simulated output to look like a shell error if special characters are used
     if ';' in target or '&&' in target or '|' in target:
-        executed_cmd = target.split(';')[1] if ';' in target else "unknown"
-        return f"<pre>PING {target} (127.0.0.1): 56 data bytes\nsh: 1: {executed_cmd}: permission denied</pre>", 200
-    return f"<pre>PING {target} (127.0.0.1): 56 data bytes\n64 bytes from 127.0.0.1: icmp_seq=0 ttl=64 time=0.031 ms</pre>", 200
+        return f"PING {target}: (127.0.0.1) 56(84) bytes of data.\n/bin/sh: 1: {target}: not found", 200
+    return f"<pre>PING {target} (127.0.0.1) 56(84) bytes of data.\n64 bytes from 127.0.0.1: icmp_seq=1 ttl=64 time=0.031 ms</pre>", 200
 
-@app.route('/api/v1/secrets')
-def secrets():
-    # VULNERABILITY: Information Exposure
-    config = {
-        "DB_PASSWORD": "LegacyPassword_DontChange",
-        "AWS_KEY": "AKIAJSI9242EXAMPLE",
-        "ENV": "PRODUCTION",
-        "INTERNAL_GATEWAY": "10.0.5.1"
+@app.route('/config')
+def config():
+    # VULNERABILITY: Exposure of sensitive data
+    settings = {
+        "ENVIRONMENT": "PRODUCTION",
+        "AWS_S3_BUCKET": "company-backup-bucket-us-east-1",
+        "SECRET_TOKEN": "sk_live_51MabcXYZ123fakekey",
+        "DEBUG": True
     }
-    return jsonify(config)
+    return json.dumps(settings), 200, {'Content-Type': 'application/json'}
 
 @app.route('/<path:path>')
 def catch_all(path):
-    return "Page Not Found", 404
+    return f"Resource '{path}' not found on this server.", 404
 
 def main():
     # Start the periodic logging

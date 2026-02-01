@@ -3,12 +3,16 @@ const API_BASE = '/api';
 
 // Update status every 2 seconds
 let statusInterval;
+let honeypotLogInterval;
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', () => {
     updateStatus();
     loadAttacks();
+    loadHoneypotLogs();
+    updateHoneypotStatus();
     startStatusUpdates();
+    startHoneypotLogUpdates();
 });
 
 // Start periodic status updates
@@ -18,6 +22,15 @@ function startStatusUpdates() {
         updateStatus();
         loadAttacks();
     }, 2000);
+}
+
+// Start periodic honeypot log updates (every 10 seconds)
+function startHoneypotLogUpdates() {
+    if (honeypotLogInterval) clearInterval(honeypotLogInterval);
+    honeypotLogInterval = setInterval(() => {
+        loadHoneypotLogs();
+        updateHoneypotStatus();
+    }, 10000);
 }
 
 // Show notification
@@ -262,3 +275,129 @@ document.getElementById('interface-input')?.addEventListener('keypress', (e) => 
         initializeMonitor();
     }
 });
+
+// Generate Flask honeypot
+async function generateFlask() {
+    const btn = document.getElementById('generate-flask-btn');
+    const originalContent = btn.innerHTML;
+    
+    try {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="btn-icon">⏳</span> Generating...';
+        showNotification('Generating Flask honeypot...', 'info');
+        
+        const response = await fetch(`${API_BASE}/honeypot/generate`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(data.message, 'success');
+            updateHoneypotStatus();
+        } else {
+            showNotification(data.error || 'Failed to generate Flask honeypot', 'error');
+        }
+    } catch (error) {
+        showNotification('Error connecting to server', 'error');
+        console.error(error);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalContent;
+    }
+}
+
+// Update honeypot status
+async function updateHoneypotStatus() {
+    try {
+        const response = await fetch(`${API_BASE}/honeypot/status`);
+        const data = await response.json();
+        
+        if (data.success) {
+            // Update template status
+            const templateStatus = document.getElementById('honeypot-template-status');
+            if (data.template_exists) {
+                templateStatus.innerHTML = '<span class="status-indicator status-online"></span> Ready';
+            } else {
+                templateStatus.innerHTML = '<span class="status-indicator status-offline"></span> Missing';
+            }
+            
+            // Update output status
+            const outputStatus = document.getElementById('honeypot-output-status');
+            if (data.output_exists) {
+                outputStatus.innerHTML = '<span class="status-indicator status-online"></span> Generated';
+            } else {
+                outputStatus.innerHTML = '<span class="status-indicator status-offline"></span> Not Generated';
+            }
+            
+            // Update last generated time
+            const lastGenerated = document.getElementById('honeypot-last-generated');
+            if (data.output_modified) {
+                const date = new Date(data.output_modified);
+                lastGenerated.textContent = date.toLocaleString();
+            } else {
+                lastGenerated.textContent = 'Never';
+            }
+        }
+    } catch (error) {
+        console.error('Error updating honeypot status:', error);
+    }
+}
+
+// Load honeypot logs
+async function loadHoneypotLogs() {
+    try {
+        const response = await fetch(`${API_BASE}/honeypot/logs`);
+        const data = await response.json();
+        
+        const honeypotLog = document.getElementById('honeypot-log');
+        const entryCount = document.getElementById('honeypot-entry-count');
+        
+        if (!data.success) {
+            honeypotLog.innerHTML = `<div class="error-message">${data.error}</div>`;
+            return;
+        }
+        
+        entryCount.textContent = data.entries.length;
+        
+        if (data.entries.length === 0) {
+            honeypotLog.innerHTML = '<div class="no-logs">No honeypot logs yet</div>';
+            return;
+        }
+        
+        honeypotLog.innerHTML = data.entries.slice(0, 20).map(entry => {
+            const accessList = entry.accesses.map(access => `
+                <div class="honeypot-access-item">
+                    <span class="endpoint">${escapeHtml(access.endpoint)}</span>
+                    <span class="ip">${access.ip || 'N/A'}</span>
+                    <span class="time">${access.time || 'N/A'}</span>
+                </div>
+            `).join('');
+            
+            return `
+                <div class="honeypot-log-entry">
+                    <div class="honeypot-log-header">
+                        <span class="honeypot-timestamp">${entry.timestamp}</span>
+                        <span class="honeypot-access-count">${entry.accesses.length} accesses</span>
+                    </div>
+                    <div class="honeypot-accesses">
+                        ${accessList}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading honeypot logs:', error);
+    }
+}
+
+// Refresh honeypot logs manually
+function refreshHoneypotLogs() {
+    showNotification('Refreshing honeypot logs...', 'info');
+    loadHoneypotLogs();
+    updateHoneypotStatus();
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}

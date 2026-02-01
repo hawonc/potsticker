@@ -13,12 +13,17 @@ import random
 import os
 import subprocess
 import tempfile
+import sys
 from pathlib import Path
 from scapy.all import *
 from scapy.layers.eap import EAP, EAPOL
 import hashlib
 from scapy.all import RadioTap
 from scapy.layers.dot11 import Dot11, Dot11Auth
+
+# Add parent directory to path to import ai module
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from ai.main import process_flask_file
 
 
   #time keep
@@ -435,7 +440,121 @@ def clear_attacks():
     attack_log = []
     return jsonify({'success': True, 'message': 'Attack log cleared'})
 
+# Paths for honeypot files
+POTS_DIR = Path(__file__).parent.parent / 'pots'
+AI_DIR = Path(__file__).parent.parent / 'ai'
+HONEYPOT_LOG_FILE = POTS_DIR / 'access_log.txt'
+HONEYPOT_TEMPLATE = POTS_DIR / 'main.py'
+HONEYPOT_OUTPUT = POTS_DIR / 'temptation.py'
+FLASK_GEN_PROMPT = AI_DIR / 'prompts' / 'flask_gen.md'
+
+@app.route('/api/honeypot/logs')
+def get_honeypot_logs():
+    """Get honeypot access logs from pots/access_log.txt"""
+    try:
+        if HONEYPOT_LOG_FILE.exists():
+            with open(HONEYPOT_LOG_FILE, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Parse logs into structured format
+            entries = []
+            current_entry = None
+            
+            for line in content.split('\n'):
+                line = line.strip()
+                if line.startswith('=== Log Entry at'):
+                    if current_entry:
+                        entries.append(current_entry)
+                    timestamp = line.replace('=== Log Entry at ', '').replace(' ===', '')
+                    current_entry = {'timestamp': timestamp, 'accesses': []}
+                elif line.startswith('Endpoint:'):
+                    endpoint = line.replace('Endpoint: ', '')
+                    if current_entry:
+                        current_entry['accesses'].append({'endpoint': endpoint, 'ip': None, 'time': None})
+                elif line.startswith('- IP:') and current_entry and current_entry['accesses']:
+                    parts = line.replace('- IP: ', '').split(', Time: ')
+                    if len(parts) == 2:
+                        current_entry['accesses'][-1]['ip'] = parts[0]
+                        current_entry['accesses'][-1]['time'] = parts[1]
+            
+            if current_entry:
+                entries.append(current_entry)
+            
+            # Reverse to show newest first
+            entries.reverse()
+            
+            return jsonify({
+                'success': True,
+                'entries': entries,
+                'raw': content
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'entries': [],
+                'raw': '',
+                'message': 'No log file found'
+            })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/honeypot/generate', methods=['POST'])
+def generate_flask():
+    """Generate a new Flask honeypot using AI"""
+    try:
+        # Read the prompt file
+        if not FLASK_GEN_PROMPT.exists():
+            return jsonify({'success': False, 'error': 'Prompt file not found'}), 404
+        
+        with open(FLASK_GEN_PROMPT, 'r', encoding='utf-8') as f:
+            query = f.read()
+        
+        # Call process_flask_file from ai/main.py
+        response = process_flask_file(
+            template_path=str(HONEYPOT_TEMPLATE),
+            logs_path=str(HONEYPOT_LOG_FILE),
+            query=query,
+            output_path=str(HONEYPOT_OUTPUT)
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': f'Flask honeypot generated successfully at {HONEYPOT_OUTPUT}',
+            'output_file': str(HONEYPOT_OUTPUT)
+        })
+    except FileNotFoundError as e:
+        return jsonify({'success': False, 'error': f'File not found: {str(e)}'}), 404
+    except ValueError as e:
+        return jsonify({'success': False, 'error': f'Configuration error: {str(e)}. Please ensure GEMINI_API_KEY is set.'}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/honeypot/status')
+def honeypot_status():
+    """Get honeypot generation status and file info"""
+    try:
+        status = {
+            'template_exists': HONEYPOT_TEMPLATE.exists(),
+            'log_exists': HONEYPOT_LOG_FILE.exists(),
+            'output_exists': HONEYPOT_OUTPUT.exists(),
+            'prompt_exists': FLASK_GEN_PROMPT.exists()
+        }
+        
+        if HONEYPOT_OUTPUT.exists():
+            stat = HONEYPOT_OUTPUT.stat()
+            status['output_modified'] = datetime.fromtimestamp(stat.st_mtime).isoformat()
+            status['output_size'] = stat.st_size
+        
+        if HONEYPOT_LOG_FILE.exists():
+            stat = HONEYPOT_LOG_FILE.stat()
+            status['log_modified'] = datetime.fromtimestamp(stat.st_mtime).isoformat()
+            status['log_size'] = stat.st_size
+        
+        return jsonify({'success': True, **status})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 if __name__ == '__main__':
     print("Starting WiFi Monitor Web Interface...")
     print("Access the interface at: http://localhost:6767")
-    app.run(host='0.0.0.0', port=6767, debug=True)
+    app.run(host='0.0.0.0', port=6767, debug=False)

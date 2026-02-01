@@ -91,6 +91,51 @@
             </div>
         </section>
 
+        <!-- Honeypot Management -->
+        <section class="card">
+            <h2>Web Honeypot Management</h2>
+            <div class="honeypot-controls">
+                <div class="honeypot-status-grid">
+                    <div class="status-item">
+                        <div class="status-label">Template File</div>
+                        <div class="status-value" id="honeypot-template-status">
+                            <span class="status-indicator status-offline"></span> Unknown
+                        </div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">Generated File</div>
+                        <div class="status-value" id="honeypot-output-status">
+                            <span class="status-indicator status-offline"></span> Unknown
+                        </div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">Last Generated</div>
+                        <div class="status-value" id="honeypot-last-generated">Never</div>
+                    </div>
+                </div>
+                <div class="button-group honeypot-actions">
+                    <button onclick="generateFlask()" class="btn btn-primary btn-large" id="generate-flask-btn">
+                        <span class="btn-icon">⚡</span> Generate Flask
+                    </button>
+                </div>
+                <p class="help-text">Uses AI to generate a new Flask honeypot based on access logs</p>
+            </div>
+        </section>
+
+        <!-- Honeypot Logs -->
+        <section class="card">
+            <div class="section-header">
+                <h2>Web Honeypot Logs</h2>
+                <button onclick="refreshHoneypotLogs()" class="btn btn-secondary btn-small">Refresh</button>
+            </div>
+            <div class="honeypot-log-stats">
+                <span id="honeypot-entry-count">0</span> log entries
+            </div>
+            <div id="honeypot-log" class="honeypot-log">
+                <div class="no-logs">No honeypot logs yet</div>
+            </div>
+        </section>
+
         <!-- Notifications -->
         <div id="notification-container"></div>
     </div>
