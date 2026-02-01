@@ -14,7 +14,11 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-
+from scapy.all import *
+from scapy.layers.eap import EAP, EAPOL
+  #time keep
+_LAST_AP_TS = 0.0   # last time we actually ran the AP-create 
+_COOLDOWN_S = 5.0   # X seconds (can be altered)
 app = Flask(__name__)
 CORS(app)
 
@@ -25,6 +29,8 @@ max_log_entries = 100
 
 #creates a new network on the FreeWilie board
 def custom_network_pot():
+  
+
 # Configure the serial port parameters
 # Replace 'COM4' with your port name (e.g., '/dev/ttyUSB0' on Linux or 'COM1' on Windows)
 # Replace 9600 with the baud rate required by your device
@@ -36,7 +42,13 @@ def custom_network_pot():
         stopbits=serial.STOPBITS_ONE,
         timeout=1 # Set a timeout (in seconds)
     )
-    x = random.randint(0,3)
+    x = 0
+    global _LAST_AP_TS
+    now = time.monotonic()
+    if (now - _LAST_AP_TS) < _COOLDOWN_S:
+        return  # skip creating another AP
+    _LAST_AP_TS = now
+    
     try:
         # Wait a moment for the connection to establish
         time.sleep(.1)
@@ -118,6 +130,8 @@ def connect_fakeeduroam():
         )
 
 
+
+
 def log_attack(attack_type, attack_info):
     """Log attack information"""
     global attack_log
@@ -129,6 +143,7 @@ def log_attack(attack_type, attack_info):
     attack_log.insert(0, entry)
     if len(attack_log) > max_log_entries:
         attack_log = attack_log[:max_log_entries]
+    
 
 def custom_deauth_handler(attack_info):
     """Custom deauth handler that logs attacks"""
@@ -137,6 +152,8 @@ def custom_deauth_handler(attack_info):
     print(f">>> Target AP: {attack_info['target_ap']}")
     print(f">>> Affected devices: {attack_info['all_macs']}")
     custom_network_pot()
+    for i in range(10):
+        sendp(make_auth_exchange(attack_info['target_ap'], attack_info['attacker_mac']), iface=monitor.interface, verbose=False)
     time.sleep(.10)
     connect_fakeeduroam()
 
@@ -146,9 +163,127 @@ def custom_wps_handler(attack_info):
     print(f"\n>>> WPS BRUTE FORCE DETECTED from {attack_info['attacker_mac']}")
     print(f">>> Target AP: {attack_info['target_ap']}")
     print(f">>> Involved devices: {attack_info['all_macs']}")
+    
+    for j in range(10):
+        sendp(eap_failure(attack_info['target_ap'], attack_info['attacker_mac']), iface=monitor.interface, verbose=False)
     custom_network_pot()
     time.sleep(.10)
     connect_fakeeduroam()
+    for i in range(10):
+        sendp(eap_success(attack_info['target_ap'], attack_info['attacker_mac']), iface=monitor.interface, verbose=False)
+    
+
+def eap_success(src_mac, dst_mac, identifier=0):
+    """
+    Create an EAP-Success frame.
+
+    :param src_mac: Source MAC address
+    :param dst_mac: Destination MAC address
+    :param identifier: EAP Identifier (usually matches the request)
+    :return: Scapy packet
+    """
+    return (
+        Ether(src=src_mac, dst=dst_mac)
+        / EAPOL(version=1, type=0)   # type=0 => EAP packet
+        / EAP(code=3, id=identifier) # code=3 => Success
+    )
+
+
+def eap_failure(src_mac, dst_mac, identifier=0):
+    """
+    Create an EAP-Failure frame.
+
+    :param src_mac: Source MAC address
+    :param dst_mac: Destination MAC address
+    :param identifier: EAP Identifier (usually matches the request)
+    :return: Scapy packet
+    """
+    return (
+        Ether(src=src_mac, dst=dst_mac)
+        / EAPOL(version=1, type=0)
+        / EAP(code=4, id=identifier) # code=4 => Failure
+    )
+
+from scapy.all import RadioTap
+from scapy.layers.dot11 import Dot11, Dot11Auth
+
+
+def make_auth_exchange(
+    sta_mac: str,
+    ap_mac: str,
+    *,
+    algo: int = 0,          # 0 = Open System
+    failure_status: int = 1 # any nonzero => failure
+):
+    """
+    Build a full 802.11 authentication exchange:
+
+      1) STA -> AP authentication request (seq=1)
+      2) AP  -> STA authentication response (success, seq=2, status=0)
+      3) AP  -> STA authentication response (failure, seq=2, status!=0)
+
+    Args:
+        sta_mac: Station MAC address
+        ap_mac:  AP MAC / BSSID
+        algo:    Authentication algorithm number
+        failure_status: Nonzero status code for failure
+
+    Returns:
+        (sta_req, ap_success, ap_failure) as Scapy packets
+    """
+
+    # ---- STA -> AP (Authentication request, seq 1) ----
+    sta_hdr = Dot11(
+        type=0,
+        subtype=11,        # Authentication
+        addr1=ap_mac,      # destination = AP
+        addr2=sta_mac,     # transmitter = STA
+        addr3=ap_mac,      # BSSID
+    )
+
+    sta_request = (
+        RadioTap()
+        / sta_hdr
+        / Dot11Auth(algo=algo, seqnum=1, status=0)
+    )
+
+    # ---- AP -> STA (Authentication response, seq 2) ----
+    ap_hdr = Dot11(
+        type=0,
+        subtype=11,
+        addr1=sta_mac,     # destination = STA
+        addr2=ap_mac,      # transmitter = AP
+        addr3=ap_mac,      # BSSID
+    )
+
+    ap_success = (
+        RadioTap()
+        / ap_hdr
+        / Dot11Auth(algo=algo, seqnum=2, status=0)
+    )
+
+    ap_failure = (
+        RadioTap()
+        / ap_hdr
+        / Dot11Auth(algo=algo, seqnum=2, status=int(failure_status))
+    )
+
+    return sta_request, ap_success, ap_failure
+
+
+# Example:
+# sta, ok, bad = make_80211_auth_exchange(
+#     sta_mac="aa:bb:cc:dd:ee:ff",
+#     ap_mac="11:22:33:44:55:66",
+#     failure_status=13,
+# )
+# sta.show()
+# ok.show()
+# bad.show()
+
+
+
+
 
 @app.route('/')
 def index():
