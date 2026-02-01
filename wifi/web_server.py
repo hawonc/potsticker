@@ -8,7 +8,7 @@ from wifi import WiFiMonitor
 import threading
 import time
 from datetime import datetime
-import serial
+import serial as serington
 import random
 import os
 import subprocess
@@ -20,6 +20,7 @@ from scapy.layers.eap import EAP, EAPOL
 import hashlib
 from scapy.all import RadioTap
 from scapy.layers.dot11 import Dot11, Dot11Auth
+import re
 
 # Add parent directory to path to import ai module
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -38,22 +39,20 @@ attack_log = []
 max_log_entries = 100
 
 #creates a new network on the FreeWilie board
-def custom_network_pot():
+def custom_network_pot(x = 0):
   
 
 # Configure the serial port parameters
 # Replace 'COM4' with your port name (e.g., '/dev/ttyUSB0' on Linux or 'COM1' on Windows)
 # Replace 9600 with the baud rate required by your device
-    ser = serial.Serial(
+    ser = serington.Serial(
         port='COM3',
         baudrate=9600,
-        bytesize=serial.EIGHTBITS,
-        parity=serial.PARITY_NONE,
-        stopbits=serial.STOPBITS_ONE,
+        bytesize=serington.EIGHTBITS,
+        parity=serington.PARITY_NONE,
+        stopbits=serington.STOPBITS_ONE,
         timeout=1 # Set a timeout (in seconds)
     )
-    x = 0
-    
     try:
         # Wait a moment for the connection to establish
         time.sleep(.1)
@@ -63,7 +62,7 @@ def custom_network_pot():
 
             # Data must be sent as bytes. Encode the string to bytes.
             waiting = '\n'
-            data_to_send = f'e\w\\a fakeeduroam password1 {x} 0' # The 'b' prefix creates a bytes object
+            data_to_send = f'e\\w\\a fakeeduroam password1 {x} 0' # The 'b' prefix creates a bytes object
             # Alternatively, use: data_to_send = bytes('Hello, world!\n', 'utf-8')
             ser.write(waiting.encode('utf-8'))
             ser.write(waiting.encode('utf-8'))
@@ -81,7 +80,7 @@ def custom_network_pot():
         else:
             print("Failed to open serial port.")
 
-    except serial.SerialException as e:
+    except serington.SerialException as e:
         print(f"Error: {e}")
 
     finally:
@@ -89,6 +88,69 @@ def custom_network_pot():
         if ser.is_open:
             ser.close()
             print(f"Serial port {ser.port} closed.")
+
+
+
+
+
+#function to pull AP: MAC, IP, and SSID from serial
+def info_pull():
+    """
+    Query serial device and return cleaned AP info string:
+    'MAC: xx IP: x.x.x.x SSID: name'
+    Returns None if not found.
+    """
+
+    ser = serington.Serial(
+        port="COM3",
+        baudrate=9600,
+        bytesize=serington.EIGHTBITS,
+        parity=serington.PARITY_NONE,
+        stopbits=serington.STOPBITS_ONE,
+        timeout=0.2
+    )
+
+    try:
+        # allow port to settle
+        time.sleep(0.3)
+
+        # send command
+        ser.write(b"e\\w\\p\r\n")
+
+        # wait for device to respond
+        time.sleep(0.5)
+
+        raw_lines = []
+        start = time.time()
+
+        # read everything for ~2.5 seconds
+        while time.time() - start < 2.5:
+            line = ser.readline().decode(errors="ignore").strip()
+            if line:
+                raw_lines.append(line)
+
+        raw_text = " ".join(raw_lines)
+
+        # extract AP section (second MAC)
+        match = re.search(
+            r"AP\s+MAC:\s*([0-9a-f:]+)\s+IP:\s*([0-9.]+)\s+SSID:\s*(.*?)\s+Password:",
+            raw_text,
+            re.IGNORECASE
+        )
+
+        if not match:
+            return None
+
+        mac, ip, ssid = match.groups()
+        return f"MAC: {mac} IP: {ip} SSID: {ssid.strip()}"
+
+    except serington.SerialException:
+        return None
+
+    finally:
+        if ser.is_open:
+            ser.close()
+
 
 #connectiion to the new fakeeduroam // testing dont push till it works or something
 def connect_fakeeduroam():
@@ -156,7 +218,7 @@ def custom_deauth_handler(attack_info):
     print(f"\n>>> DEAUTH ATTACK DETECTED from {attack_info['attacker_mac']}")
     print(f">>> Target AP: {attack_info['target_ap']}")
     print(f">>> Affected devices: {attack_info['all_macs']}")
-    custom_network_pot()
+    custom_network_pot(3)
     for i in range(10):
         sendp(make_auth_exchange(attack_info['target_ap'], attack_info['attacker_mac']), iface=monitor.interface, verbose=False)
     time.sleep(.10)
@@ -171,7 +233,7 @@ def custom_wps_handler(attack_info):
     
     for j in range(10):
         sendp(eap_failure(attack_info['target_ap'], attack_info['attacker_mac']), iface=monitor.interface, verbose=False)
-    custom_network_pot()
+    custom_network_pot(3)
     time.sleep(.10)
     connect_fakeeduroam()
     for i in range(10):
@@ -254,15 +316,7 @@ def eap_failure(src_mac, dst_mac, identifier=0):
             ser.close()
             print(f"Serial port {ser.port} closed.")"""
 
-
-
-
-from scapy.all import RadioTap
-from scapy.layers.dot11 import Dot11, Dot11Auth
-
-
 import hashlib
-from scapy.all import RadioTap
 from scapy.layers.dot11 import Dot11, Dot11Auth
 
 
