@@ -11,7 +11,6 @@ potsticker/
 ├── wifi/          # WiFi attack detection and monitoring
 ├── pots/          # Honeypot Flask server (containerized)
 ├── ai/            # LLM-powered honeypot evolution
-└── handshake.py   # Low-level packet capture utility
 ```
 
 ## Features
@@ -100,14 +99,6 @@ Usage:
 cd ai
 export GEMINI_API_KEY="your-key"
 uv run main.py <template.py> <access_log.txt> <prompt.md> [output.py]
-```
-
-### handshake.py — Packet Capture Utility
-
-Standalone Scapy script for capturing and displaying deauthentication and EAPOL (WPA handshake) packets on a specified interface.
-
-```bash
-sudo python handshake.py <interface>
 ```
 
 ---
