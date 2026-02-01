@@ -8,6 +8,5 @@ services:
       - "3000:3000"
     volumes:
       - ./access_log.txt:/app/access_log.txt
-      - ./compressed_endpoints.txt:/app/compressed_endpoints.txt
     restart: unless-stopped
     network_mode: bridge

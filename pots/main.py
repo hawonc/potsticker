@@ -8,17 +8,7 @@ app = Flask(__name__)
 
 # Store unique accesses: {endpoint: set of (ip, timestamp)}
 access_log = {}
-compressed_log_file = "compressed_endpoints.txt"
 
-def write_compressed_log():
-    """Write unique endpoint names to compressed log file (no repeats, no timestamps)"""
-    with log_lock:
-        unique_endpoints = set(access_log.keys())
-        if unique_endpoints:
-            with open(compressed_log_file, "w") as f:
-                for endpoint in unique_endpoints:
-                    f.write(f"{endpoint}\n")
-access_log = {}
 log_lock = threading.Lock()
 log_file = "access_log.txt"
 
@@ -34,8 +24,7 @@ def log_to_file():
                     for ip, time in accesses:
                         f.write(f"  - IP: {ip}, Time: {time}\n")
                 f.write("\n")
-            # Also update compressed log
-            write_compressed_log()
+            access_log = {}
     # Schedule next write in 60 seconds
     threading.Timer(60.0, log_to_file).start()
 

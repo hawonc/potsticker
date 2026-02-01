@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Copy project files
 COPY pyproject.toml ./
-COPY main.py ./
+COPY temptation.py ./
 
 # Install uv and dependencies
 RUN pip install uv && \
@@ -14,4 +14,4 @@ RUN pip install uv && \
 EXPOSE 3000
 
 # Run the server
-CMD ["uv", "run", "main.py"]
+CMD ["uv", "run", "temptation.py"]

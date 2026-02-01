@@ -1,6 +1,7 @@
 import os
 import sys
-import google.generativeai as genai
+import json
+import google.genai as genai
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -41,11 +42,13 @@ def query_llm(query: str, file_content: str) -> str:
     if not api_key:
         raise ValueError("GEMINI_API_KEY not found in environment variables.")
     
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-3-flash-preview')
+    client = genai.Client(api_key=api_key)
     prompt = f"{query}\n\nFile contents:\n{file_content}"
     
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model='gemini-3-flash-preview',
+        contents=prompt
+    )
     return response.text
 
 
@@ -63,7 +66,7 @@ def save_output(content: str, output_path: str) -> None:
         f.write(content)
 
 
-def process_file(template_path: str, logs_path: str, query: str, output_path: str = None) -> str:
+def process_flask_file(template_path: str, logs_path: str, query: str, output_path: str = None) -> str:
     template_content = read_input_file(template_path)
     logs_content = read_input_file(logs_path)
     # Combine both contents for the LLM prompt
@@ -71,7 +74,35 @@ def process_file(template_path: str, logs_path: str, query: str, output_path: st
     response = query_llm(query, combined_content)
     
     if output_path:
-        save_output(response, output_path)
+        # Try to parse response as JSON and extract file_content
+        try:
+            # Remove markdown code fences if present
+            cleaned_response = response.strip()
+            if cleaned_response.startswith('```json'):
+                cleaned_response = cleaned_response[7:]
+            if cleaned_response.startswith('```'):
+                cleaned_response = cleaned_response[3:]
+            if cleaned_response.endswith('```'):
+                cleaned_response = cleaned_response[:-3]
+            cleaned_response = cleaned_response.strip()
+            
+            response_json = json.loads(cleaned_response)
+            if 'file_content' in response_json:
+                file_content = response_json['file_content']
+                
+                # Verify that file_content ends with main()
+                if not file_content.rstrip().endswith('main()'):
+                    # Find the last occurrence of main() and truncate after it
+                    last_main_index = file_content.rfind('main()')
+                    if last_main_index != -1:
+                        # Include the main() and truncate everything after
+                        file_content = file_content[:last_main_index + len('main()')]
+                save_output(file_content, output_path)
+            else:
+                save_output(response, output_path)
+        except json.JSONDecodeError:
+            # If JSON parsing fails, try again
+            return process_file(template_path, logs_path, query, output_path)
     
     return response
 
@@ -79,19 +110,20 @@ def process_file(template_path: str, logs_path: str, query: str, output_path: st
 def main():
     """CLI entry point."""
     if len(sys.argv) < 4:
-        print("Usage: python main.py <template> <logs> <query> [output_file]")
-        print("Example: python main.py template.txt logs.txt 'Summarize this file' output.txt")
+        print("Usage: python main.py <template> <logs> <query_file> [output_file]")
+        print("Example: python main.py template.txt logs.txt query.txt output.txt")
         sys.exit(1)
     
     template_file = sys.argv[1]
     logs_file = sys.argv[2]
-    query = sys.argv[3]
+    query_file = sys.argv[3]
     output_file = sys.argv[4] if len(sys.argv) > 4 else "llm_output.txt"
     
     try:
-        # Read input file
-        print(f"Reading file: {template_file}  and {logs_file}")
-        response = process_file(template_file, logs_file, query, output_file)
+        # Read input files
+        print(f"Reading files: {template_file}, {logs_file}, and {query_file}")
+        query = read_input_file(query_file)
+        response = process_flask_file(template_file, logs_file, query, output_file)
         
         # Print success message
         print(f"Output saved to: {output_file}")
@@ -103,8 +135,8 @@ def main():
         print(response)
         print("="*50)
         
-    except FileNotFoundError:
-        print(f"Error: File '{template_file}' or '{logs_file}' not found")
+    except FileNotFoundError as e:
+        print(f"Error: One of the required files was not found: {e}")
         sys.exit(1)
     except ValueError as e:
         print(f"Error: {e}")
