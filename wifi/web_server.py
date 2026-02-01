@@ -16,6 +16,11 @@ import tempfile
 from pathlib import Path
 from scapy.all import *
 from scapy.layers.eap import EAP, EAPOL
+import hashlib
+from scapy.all import RadioTap
+from scapy.layers.dot11 import Dot11, Dot11Auth
+
+
   #time keep
 _LAST_AP_TS = 0.0   # last time we actually ran the AP-create 
 _COOLDOWN_S = 5.0   # X seconds (can be altered)
@@ -43,11 +48,6 @@ def custom_network_pot():
         timeout=1 # Set a timeout (in seconds)
     )
     x = 0
-    global _LAST_AP_TS
-    now = time.monotonic()
-    if (now - _LAST_AP_TS) < _COOLDOWN_S:
-        return  # skip creating another AP
-    _LAST_AP_TS = now
     
     try:
         # Wait a moment for the connection to establish
@@ -204,6 +204,59 @@ def eap_failure(src_mac, dst_mac, identifier=0):
         / EAP(code=4, id=identifier) # code=4 => Failure
     )
 
+"""def websocket_honeypot():
+    ser = serial.Serial(
+        port='COM3',
+        baudrate=9600,
+        bytesize=serial.EIGHTBITS,
+        parity=serial.PARITY_NONE,
+        stopbits=serial.STOPBITS_ONE,
+        timeout=1 # Set a timeout (in seconds)
+    )
+    try:
+        # Wait a moment for the connection to establish
+        time.sleep(.1)
+
+        if ser.is_open:
+            print(f"Serial port {ser.port} opened successfully.")
+
+            # Data must be sent as bytes. Encode the string to bytes.
+            waiting = '\n'
+            data_to_send = f'e\\(TODO)\\r on\\p 8765\\m password\\u admin\\p {os.getenv("WS_PASSWORD")}'
+            # Alternatively, use: data_to_send = bytes('Hello, world!\n', 'utf-8')
+            ser.write(waiting.encode('utf-8'))
+            ser.write(waiting.encode('utf-8'))
+            time.sleep(0.3) # Wait for device to respond
+            ser.write(data_to_send.encode('utf-8'))
+            ser.write(waiting.encode('utf-8'))
+            #ser.write(data_to_send.encode('utf-8'))
+            print(f"Sent data: {data_to_send}")
+
+            # Optional: Read response
+            time.sleep(0.1) # Wait for device to respond
+            if ser.in_waiting > 0:
+                response = ser.readline().decode('utf-8').strip()
+                print(f"Received response: {response}")
+        else:
+            print("Failed to open serial port.")
+
+    except serial.SerialException as e:
+        print(f"Error: {e}")
+
+    finally:
+        # Always close the port when done to free the resource
+        if ser.is_open:
+            ser.close()
+            print(f"Serial port {ser.port} closed.")"""
+
+
+
+
+from scapy.all import RadioTap
+from scapy.layers.dot11 import Dot11, Dot11Auth
+
+
+import hashlib
 from scapy.all import RadioTap
 from scapy.layers.dot11 import Dot11, Dot11Auth
 
@@ -212,63 +265,39 @@ def make_auth_exchange(
     sta_mac: str,
     ap_mac: str,
     *,
-    algo: int = 0,          # 0 = Open System
-    failure_status: int = 1 # any nonzero => failure
+    algo: int = 0,
+    failure_status: int = 1,
 ):
-    """
-    Build a full 802.11 authentication exchange:
-
-      1) STA -> AP authentication request (seq=1)
-      2) AP  -> STA authentication response (success, seq=2, status=0)
-      3) AP  -> STA authentication response (failure, seq=2, status!=0)
-
-    Args:
-        sta_mac: Station MAC address
-        ap_mac:  AP MAC / BSSID
-        algo:    Authentication algorithm number
-        failure_status: Nonzero status code for failure
-
-    Returns:
-        (sta_req, ap_success, ap_failure) as Scapy packets
-    """
-
     # ---- STA -> AP (Authentication request, seq 1) ----
-    sta_hdr = Dot11(
-        type=0,
-        subtype=11,        # Authentication
-        addr1=ap_mac,      # destination = AP
-        addr2=sta_mac,     # transmitter = STA
-        addr3=ap_mac,      # BSSID
-    )
-
-    sta_request = (
+    sta_req = (
         RadioTap()
-        / sta_hdr
+        / Dot11(
+            type=0,
+            subtype=11,
+            addr1=ap_mac,
+            addr2=sta_mac,
+            addr3=ap_mac,
+        )
         / Dot11Auth(algo=algo, seqnum=1, status=0)
     )
+
+    # hash ONLY the STA request (stable: no Radiotap)
+    sta_req_hash = hashlib.sha256(bytes(sta_req[Dot11])).hexdigest()
 
     # ---- AP -> STA (Authentication response, seq 2) ----
     ap_hdr = Dot11(
         type=0,
         subtype=11,
-        addr1=sta_mac,     # destination = STA
-        addr2=ap_mac,      # transmitter = AP
-        addr3=ap_mac,      # BSSID
+        addr1=sta_mac,
+        addr2=ap_mac,
+        addr3=ap_mac,
     )
 
-    ap_success = (
-        RadioTap()
-        / ap_hdr
-        / Dot11Auth(algo=algo, seqnum=2, status=0)
-    )
+    ap_success = RadioTap() / ap_hdr / Dot11Auth(algo=algo, seqnum=2, status=0)
+    ap_failure = RadioTap() / ap_hdr / Dot11Auth(algo=algo, seqnum=2, status=int(failure_status))
 
-    ap_failure = (
-        RadioTap()
-        / ap_hdr
-        / Dot11Auth(algo=algo, seqnum=2, status=int(failure_status))
-    )
+    return sta_req, sta_req_hash, ap_success, ap_failure
 
-    return sta_request, ap_success, ap_failure
 
 
 # Example:
