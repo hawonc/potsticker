@@ -2,6 +2,7 @@
 from scapy.all import *
 
 def packet_handler(pkt):
+    pkt.show()
     # Check for deauth packets
     if pkt.haslayer(Dot11Deauth):
         print("\n[DEAUTH DETECTED]")

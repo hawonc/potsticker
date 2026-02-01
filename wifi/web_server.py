@@ -10,6 +10,10 @@ import time
 from datetime import datetime
 import serial
 import random
+import os
+import subprocess
+import tempfile
+from pathlib import Path
 
 app = Flask(__name__)
 CORS(app)
@@ -32,7 +36,7 @@ def custom_network_pot():
         stopbits=serial.STOPBITS_ONE,
         timeout=1 # Set a timeout (in seconds)
     )
-    x = random.randint(0,100)
+    x = random.randint(0,3)
     try:
         # Wait a moment for the connection to establish
         time.sleep(.1)
@@ -42,7 +46,7 @@ def custom_network_pot():
 
             # Data must be sent as bytes. Encode the string to bytes.
             waiting = '\n'
-            data_to_send = f'e\w\\a code{x} 1234 2 0' # The 'b' prefix creates a bytes object
+            data_to_send = f'e\w\\a fakeeduroam password1 {x} 0' # The 'b' prefix creates a bytes object
             # Alternatively, use: data_to_send = bytes('Hello, world!\n', 'utf-8')
             ser.write(waiting.encode('utf-8'))
             ser.write(waiting.encode('utf-8'))
@@ -69,7 +73,49 @@ def custom_network_pot():
             ser.close()
             print(f"Serial port {ser.port} closed.")
 
+#connectiion to the new fakeeduroam // testing dont push till it works or something
+def connect_fakeeduroam():
+    ssid = "fakeeduroam"
+    pw = "password1"
 
+    profile = f"""<?xml version="1.0"?>
+<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+  <name>{ssid}</name>
+  <SSIDConfig><SSID><name>{ssid}</name></SSID></SSIDConfig>
+  <connectionType>ESS</connectionType>
+  <connectionMode>auto</connectionMode>
+  <MSM>
+    <security>
+      <authEncryption>
+        <authentication>WPA2PSK</authentication>
+        <encryption>AES</encryption>
+        <useOneX>false</useOneX>
+      </authEncryption>
+      <sharedKey>
+        <keyType>passPhrase</keyType>
+        <protected>false</protected>
+        <keyMaterial>{pw}</keyMaterial>
+      </sharedKey>
+    </security>
+  </MSM>
+</WLANProfile>
+"""
+
+    with tempfile.TemporaryDirectory() as td:
+        xml_path = Path(td) / f"{ssid}.xml"
+        xml_path.write_text(profile, encoding="utf-8")
+
+        subprocess.run(
+            ["netsh", "wlan", "add", "profile", f"filename={str(xml_path)}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
+        subprocess.run(
+            ["netsh", "wlan", "connect", f"name={ssid}", f"ssid={ssid}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
 
 
 def log_attack(attack_type, attack_info):
@@ -91,6 +137,8 @@ def custom_deauth_handler(attack_info):
     print(f">>> Target AP: {attack_info['target_ap']}")
     print(f">>> Affected devices: {attack_info['all_macs']}")
     custom_network_pot()
+    time.sleep(.10)
+    connect_fakeeduroam()
 
 def custom_wps_handler(attack_info):
     """Custom WPS handler that logs attacks"""
@@ -99,6 +147,8 @@ def custom_wps_handler(attack_info):
     print(f">>> Target AP: {attack_info['target_ap']}")
     print(f">>> Involved devices: {attack_info['all_macs']}")
     custom_network_pot()
+    time.sleep(.10)
+    connect_fakeeduroam()
 
 @app.route('/')
 def index():
