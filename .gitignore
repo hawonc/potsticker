@@ -1,2 +1,4 @@
 wifi/__*
-wifi/.venv/
+*/.venv/
+*.pyc
+*/.env
