@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WiFi Security Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=JetBrains+Mono:wght@400;600;700&family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="font-sans antialiased">
+    <div class="pixel-bg"></div>
+    <div class="container">
+        <header>
+            <h1 class="pixel-title">WiFi Security Monitor</h1>
+            <p class="subtitle">[ Advanced Detection & Response System ]</p>
+        </header>
+
+        <!-- Initialization Section -->
+        <section class="card" id="init-section">
+            <h2>Initialize Monitor</h2>
+            <div class="init-form">
+                <input type="text" id="interface-input" placeholder="Enter network interface (e.g., wlan0)" />
+                <button onclick="initializeMonitor()" class="btn btn-primary">Initialize</button>
+            </div>
+            <p class="help-text">Note: Root privileges required for packet sniffing</p>
+        </section>
+
+        <!-- Status Dashboard -->
+        <section class="card">
+            <h2>System Status</h2>
+            <div class="status-grid">
+                <div class="status-item">
+                    <div class="status-label">Interface</div>
+                    <div class="status-value" id="interface-status">Not Initialized</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Deauth Detection</div>
+                    <div class="status-value" id="deauth-status">
+                        <span class="status-indicator status-offline"></span> Offline
+                    </div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">WPS Detection</div>
+                    <div class="status-value" id="wps-status">
+                        <span class="status-indicator status-offline"></span> Offline
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Control Panel -->
+        <section class="card">
+            <h2>Control Panel</h2>
+            <div class="control-grid">
+                <div class="control-group">
+                    <h3>Deauth Detection</h3>
+                    <div class="button-group">
+                        <button onclick="startDeauth()" class="btn btn-success">Start</button>
+                        <button onclick="stopDeauth()" class="btn btn-danger">Stop</button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <h3>WPS Detection</h3>
+                    <div class="button-group">
+                        <button onclick="startWPS()" class="btn btn-success">Start</button>
+                        <button onclick="stopWPS()" class="btn btn-danger">Stop</button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <h3>All Detection</h3>
+                    <div class="button-group">
+                        <button onclick="startAll()" class="btn btn-success btn-large">Start All</button>
+                        <button onclick="stopAll()" class="btn btn-danger btn-large">Stop All</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Attack Log -->
+        <section class="card">
+            <div class="section-header">
+                <h2>Attack Log</h2>
+            </div>
+            <div class="attack-count">
+                <span id="attack-count">0</span> attacks detected
+            </div>
+            <div id="attack-log" class="attack-log">
+                <div class="no-attacks">No attacks detected yet</div>
+            </div>
+        </section>
+
+        <!-- Notifications -->
+        <div id="notification-container"></div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
